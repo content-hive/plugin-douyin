@@ -22,7 +22,7 @@ from .const import (
     PLATFORM_NAME,
     PLATFORM_URL,
 )
-from .utils import parse_cookie_string, extract_first_url, iter_gallery_items, pick_first_url
+from .utils import parse_cookie_string, extract_all_urls, extract_video_urls, extract_image_urls, iter_gallery_items
 
 from .api_client import DouyinAPIClient
 
@@ -125,70 +125,28 @@ class Parser:
             return self._build_gallery_media(aweme)
         else:
             return []
-
+    
     def _build_video_media(self, aweme: dict) -> list[ParserMediaInfo]:
         """Build a single-item list with the video's ParserMediaInfo."""
-        if not self._client:
-            raise RuntimeError("Parser not initialized")
-        
         video = aweme.get("video") or {}
         width = video.get("width")
         height = video.get("height")
         duration = video.get("duration")  # milliseconds
 
+        video_urls = extract_video_urls(video)
+        if not video_urls:
+            return []
 
-        bit_rates = video.get("bit_rate") or []
+        cover_urls = extract_all_urls(video.get("origin_cover"))
 
-        def score(stream: dict) -> tuple:
-            play = stream.get("play_addr") or {}
-            height = play.get("height") or 0
-            fps = stream.get("FPS", 0)
-            is_mp4 = 1 if stream.get("format") == "mp4" else 0
-            is_h265 = stream.get("is_h265", 0)
-            bitrate = stream.get("bit_rate", 0)
-
-            return (
-                height,    # higher resolution is better
-                fps,       # higher frame rate is better
-                is_mp4,    # prefer mp4 over dash (single file, no separate audio stream)
-                is_h265,   # H.265 offers better compression efficiency
-                bitrate,   # higher bitrate is better
-            )
-        
-        best_stream = None
-        if bit_rates:
-            valid_streams = [br for br in bit_rates if (br.get("play_addr") or {}).get("url_list")]
-
-            if valid_streams:
-                valid_streams.sort(key=score, reverse=True)
-                best_stream = valid_streams[0]
-
-        if not best_stream:
-            play_addr = video.get("play_addr") or {}
-            url_list = [u for u in (play_addr.get("url_list") or []) if u]
-            if not url_list:
-                return []
-
-            url_list.sort(key=lambda u: 0 if "watermark=0" in u else 1)
-
-            video_url = url_list[0]
-        else:
-            play_addr = best_stream.get("play_addr") or {}
-            url_list = [u for u in (play_addr.get("url_list") or []) if u]
-
-            if not url_list:
-                return []
-
-            video_url = url_list[0]
-        
-        cover_url = extract_first_url(video.get("origin_cover"))
-        
         return [
             ParserMediaInfo(
-                url=HttpUrl(video_url),
+                url=HttpUrl(video_urls[0]),
+                url_fallbacks=[HttpUrl(u) for u in video_urls[1:]] or None,
                 type=MediaType.VIDEO,
                 title=None,
-                cover=HttpUrl(cover_url) if cover_url else None,
+                cover=HttpUrl(cover_urls[0]) if cover_urls else None,
+                cover_fallbacks=[HttpUrl(u) for u in cover_urls[1:]] or None,
                 duration=duration,
                 width=width,
                 height=height,
@@ -204,32 +162,24 @@ class Parser:
             if not isinstance(item, dict):
                 continue
 
-            image_url = pick_first_url(
-                item.get("download_url"),
-                item.get("download_addr"),
-                item.get("display_image"),
-                item.get("owner_watermark_image"),
-            )
-            if not image_url:
+            image_urls = extract_image_urls(item)
+            if not image_urls:
                 continue
 
-            # Live photo: the gallery item embeds a short video clip
-            video = item.get("video") if isinstance(item.get("video"), dict) else {}
-            live_url = pick_first_url(
-                video.get("play_addr"),
-                video.get("download_addr"),
-                item.get("video_play_addr"),
-                item.get("video_download_addr"),
-            )
+            item_video = item.get("video")
+            video = item_video if isinstance(item_video, dict) else {}
+            video_urls = extract_video_urls(video)
 
-            if live_url:
+            if video_urls:
                 media_list.append(
                     ParserMediaInfo(
-                        url=HttpUrl(live_url),
+                        url=HttpUrl(video_urls[0]),
+                        url_fallbacks=[HttpUrl(u) for u in video_urls[1:]] or None,
                         type=MediaType.LIVEPHOTO,
                         title=None,
-                        cover=HttpUrl(image_url),
-                        duration=None,
+                        cover=HttpUrl(image_urls[0]),
+                        cover_fallbacks=[HttpUrl(u) for u in image_urls[1:]] or None,
+                        duration=video.get("duration"),
                         width=item.get("width"),
                         height=item.get("height"),
                     )
@@ -237,7 +187,8 @@ class Parser:
             else:
                 media_list.append(
                     ParserMediaInfo(
-                        url=HttpUrl(image_url),
+                        url=HttpUrl(image_urls[0]),
+                        url_fallbacks=[HttpUrl(u) for u in image_urls[1:]] or None,
                         type=MediaType.IMAGE,
                         title=None,
                         cover=None,
@@ -257,13 +208,14 @@ class Parser:
         sec_uid = author.get("sec_uid") or ""
         nickname = author.get("nickname") or ""
         short_id = author.get("short_id") or ""
+        unique_id = author.get("unique_id") or ""
         avatar_url = author.get("avatar_thumb", {}).get("url_list", [None])[0] or author.get("avatar_medium", {}).get("url_list", [None])[0]
         profile_url = f"{PLATFORM_URL}/user/{sec_uid}" if sec_uid else None
 
         return ParserAuthorInfo(
             uid=uid,
             name=nickname or None,
-            username=short_id or uid,
+            username=unique_id or short_id or uid,
             avatar=HttpUrl(avatar_url) if avatar_url else None,
             url=HttpUrl(profile_url) if profile_url else None,
             banner=None,
