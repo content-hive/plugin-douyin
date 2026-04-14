@@ -2,15 +2,11 @@
 
 import re
 from typing import Any, Optional
-from pydantic import HttpUrl
 
 from contenthive.plugins.context import PluginContext
-from contenthive.models.enumerates import MediaType, ParserResultStatus
-from contenthive.models.parser import (
-    ParserAuthorInfo,
-    ParserMediaInfo,
-    ParserPlatformInfo,
-    ParserResult,
+from contenthive.plugins.contracts import (
+    MediaType, ParserResultStatus,
+    ParserAuthorInfo, ParserMediaInfo, ParserPlatformInfo, ParserResult,
 )
 
 from .const import (
@@ -96,7 +92,7 @@ class Parser:
         """Assemble a complete ParserResult from a raw aweme dict."""
         return ParserResult(
             pid=str(aweme["aweme_id"]),
-            url=HttpUrl(url),
+            url=url,
             title=None,
             content=aweme.get("desc") or None,
             media=self._build_media(aweme),
@@ -141,12 +137,12 @@ class Parser:
 
         return [
             ParserMediaInfo(
-                url=HttpUrl(video_urls[0]),
-                url_fallbacks=[HttpUrl(u) for u in video_urls[1:]] or None,
+                url=video_urls[0],
+                url_fallbacks=video_urls[1:] or None,
                 type=MediaType.VIDEO,
                 title=None,
-                cover=HttpUrl(cover_urls[0]) if cover_urls else None,
-                cover_fallbacks=[HttpUrl(u) for u in cover_urls[1:]] or None,
+                cover=cover_urls[0] if cover_urls else None,
+                cover_fallbacks=cover_urls[1:] or None,
                 duration=duration,
                 width=width,
                 height=height,
@@ -173,12 +169,12 @@ class Parser:
             if video_urls:
                 media_list.append(
                     ParserMediaInfo(
-                        url=HttpUrl(video_urls[0]),
-                        url_fallbacks=[HttpUrl(u) for u in video_urls[1:]] or None,
+                        url=video_urls[0],
+                        url_fallbacks=video_urls[1:] or None,
                         type=MediaType.LIVEPHOTO,
                         title=None,
-                        cover=HttpUrl(image_urls[0]),
-                        cover_fallbacks=[HttpUrl(u) for u in image_urls[1:]] or None,
+                        cover=image_urls[0],
+                        cover_fallbacks=image_urls[1:] or None,
                         duration=video.get("duration"),
                         width=item.get("width"),
                         height=item.get("height"),
@@ -187,8 +183,8 @@ class Parser:
             else:
                 media_list.append(
                     ParserMediaInfo(
-                        url=HttpUrl(image_urls[0]),
-                        url_fallbacks=[HttpUrl(u) for u in image_urls[1:]] or None,
+                        url=image_urls[0],
+                        url_fallbacks=image_urls[1:] or None,
                         type=MediaType.IMAGE,
                         title=None,
                         cover=None,
@@ -216,8 +212,8 @@ class Parser:
             uid=uid,
             name=nickname or None,
             username=unique_id or short_id or uid,
-            avatar=HttpUrl(avatar_url) if avatar_url else None,
-            url=HttpUrl(profile_url) if profile_url else None,
+            avatar=avatar_url or None,
+            url=profile_url,
             banner=None,
             description=author.get("signature") or None,
         )
@@ -228,8 +224,8 @@ class Parser:
         return ParserPlatformInfo(
             code=PLATFORM_CODE,
             name=PLATFORM_NAME,
-            url=HttpUrl(PLATFORM_URL),
-            icon_url=HttpUrl(PLATFORM_ICON)
+            url=PLATFORM_URL,
+            icon_url=PLATFORM_ICON,
         )
 
     async def async_will_remove(self):
