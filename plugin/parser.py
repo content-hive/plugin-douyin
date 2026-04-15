@@ -18,7 +18,7 @@ from .const import (
     PLATFORM_NAME,
     PLATFORM_URL,
 )
-from .utils import parse_cookie_string, extract_all_urls, extract_video_urls, extract_image_urls, iter_gallery_items
+from .utils import parse_cookie_string, serialize_cookie_dict, extract_all_urls, extract_video_urls, extract_image_urls, iter_gallery_items
 
 from .api_client import DouyinAPIClient
 
@@ -51,7 +51,17 @@ class Parser:
         """Initialize the API client with cookies from the entry config."""
         raw_cookies = (self.entry.data or {}).get("cookies", "")
         cookies = parse_cookie_string(raw_cookies)
-        self._client = DouyinAPIClient(cookies=cookies, logger=self.context.logger)
+
+        def _on_cookies_updated(updated: dict[str, str]) -> None:
+            if self.context.save_config:
+                self.context.save_config(DOMAIN, "cookies", serialize_cookie_dict(updated))
+                self.context.logger.debug(f"{DOMAIN} cookies persisted")
+
+        self._client = DouyinAPIClient(
+            cookies=cookies,
+            logger=self.context.logger,
+            on_cookies_updated=_on_cookies_updated,
+        )
         self.context.logger.debug(f"{DOMAIN} parser initialized")
 
     def can_parse(self, data: dict[str, Any]) -> bool:
