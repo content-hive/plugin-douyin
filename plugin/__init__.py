@@ -3,38 +3,39 @@ Douyin Parser Plugin for ContentHive
 Parses Douyin content for ContentHive.
 """
 
+from typing import cast
+
 from contenthive.plugins.context import PluginContext
 
+from .api_client import DouyinAPIClient
+from .config import ConfigSchema, CONFIG_SCHEMA
 from .const import DOMAIN
+from .utils import parse_cookie_string, serialize_cookie_dict
+
+__all__ = ["ConfigSchema", "CONFIG_SCHEMA"]
 
 
-async def async_setup(context: PluginContext, config: dict) -> bool:
-    """
-    Called when the plugin is first loaded.
-
-    Args:
-        context: PluginContext instance
-        config: Plugin configuration dictionary
-
-    Returns:
-        True if setup successful, False otherwise
-    """
+async def async_setup(context: PluginContext) -> bool:
     context.logger.info(f"{DOMAIN} plugin setup")
     return True
 
 
 async def async_setup_entry(context: PluginContext, entry):
-    """
-    Called when a configuration entry is added.
-    Loads the parser platform.
+    config = cast(ConfigSchema, context.get_config(DOMAIN)) if context.get_config else ConfigSchema()
 
-    Args:
-        context: PluginContext instance
-        entry: PluginEntryData with entry_id, domain, and data
+    def _on_cookies_updated(updated: dict[str, str]) -> None:
+        if context.save_config and context.get_config:
+            cfg = context.get_config(DOMAIN)
+            context.save_config(DOMAIN, cfg.model_copy(update={"cookies": serialize_cookie_dict(updated)}))
+            context.logger.debug(f"{DOMAIN} cookies persisted")
 
-    Returns:
-        True if setup successful, False otherwise
-    """
+    client = DouyinAPIClient(
+        cookies=parse_cookie_string(config.cookies),
+        logger=context.logger,
+        on_cookies_updated=_on_cookies_updated,
+    )
+    context.data[DOMAIN] = {"client": client, "config": config}
+
     if context.async_forward_entry_setup:
         await context.async_forward_entry_setup(entry, "parser")
         await context.async_forward_entry_setup(entry, "downloader")
@@ -43,21 +44,15 @@ async def async_setup_entry(context: PluginContext, entry):
 
 
 async def async_unload_entry(context: PluginContext, entry):
-    """
-    Called when a configuration entry is removed.
-    Unloads the parser platform.
-
-    Args:
-        context: PluginContext instance
-        entry: PluginEntryData being unloaded
-
-    Returns:
-        True if unload successful, False otherwise
-    """
     if context.async_unload_platforms:
         success = await context.async_unload_platforms(entry, ["parser", "downloader"])
     else:
         success = True
+
     if success:
+        entry_data = context.data.pop(DOMAIN, {})
+        client: DouyinAPIClient | None = entry_data.get("client")
+        if client:
+            await client.close()
         context.logger.info(f"{DOMAIN} plugin entry unloaded")
     return success

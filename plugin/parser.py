@@ -9,6 +9,8 @@ from contenthive.plugins.contracts import (
     ParserAuthorInfo, ParserMediaInfo, ParserPlatformInfo, ParserResult,
 )
 
+from .api_client import DouyinAPIClient
+from .utils import extract_all_urls, extract_video_urls, extract_image_urls, iter_gallery_items
 from .const import (
     DOMAIN,
     URL_PATTERN,
@@ -18,9 +20,6 @@ from .const import (
     PLATFORM_NAME,
     PLATFORM_URL,
 )
-from .utils import parse_cookie_string, serialize_cookie_dict, extract_all_urls, extract_video_urls, extract_image_urls, iter_gallery_items
-
-from .api_client import DouyinAPIClient
 
 _AWEME_ID_RE = re.compile(r"/(?:video|note|gallery|slides)/(\d+)")
 
@@ -48,20 +47,8 @@ class Parser:
         self._client: Optional[DouyinAPIClient] = None
 
     async def async_setup(self):
-        """Initialize the API client with cookies from the entry config."""
-        raw_cookies = (self.entry.data or {}).get("cookies", "")
-        cookies = parse_cookie_string(raw_cookies)
-
-        def _on_cookies_updated(updated: dict[str, str]) -> None:
-            if self.context.save_config:
-                self.context.save_config(DOMAIN, "cookies", serialize_cookie_dict(updated))
-                self.context.logger.debug(f"{DOMAIN} cookies persisted")
-
-        self._client = DouyinAPIClient(
-            cookies=cookies,
-            logger=self.context.logger,
-            on_cookies_updated=_on_cookies_updated,
-        )
+        """Retrieve the shared API client from plugin data."""
+        self._client = self.context.data[DOMAIN]["client"]
         self.context.logger.debug(f"{DOMAIN} parser initialized")
 
     def can_parse(self, data: dict[str, Any]) -> bool:
@@ -97,6 +84,7 @@ class Parser:
         except Exception:
             self.context.logger.exception(f"Failed to parse {url}")
             raise
+
 
     def _build_result(self, url: str, aweme: dict) -> ParserResult:
         """Assemble a complete ParserResult from a raw aweme dict."""
@@ -237,14 +225,6 @@ class Parser:
             url=PLATFORM_URL,
             icon_url=PLATFORM_ICON,
         )
-
-    async def async_will_remove(self):
-        """Clean up resources."""
-        if self._client:
-            await self._client.close()
-            self._client = None
-            self.context.logger.info(f"{DOMAIN} parser client closed")
-
 
 def _extract_aweme_id(url: str) -> Optional[str]:
     match = _AWEME_ID_RE.search(url)

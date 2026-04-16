@@ -6,8 +6,7 @@ from typing import Any, Optional
 from contenthive.plugins.context import PluginContext
 
 from .api_client import DouyinAPIClient
-from .const import DOMAIN, BASE_URL, USER_AGENT
-from .utils import parse_cookie_string
+from .const import DOMAIN
 
 async def async_setup_entry(context: PluginContext, entry, async_add_entities):
     """Set up downloader entities from a config entry."""
@@ -31,11 +30,10 @@ class Downloader:
         self._client: Optional[DouyinAPIClient] = None
 
     async def async_setup(self):
-        """Initialize the API client with cookies from the entry config."""
-        raw_cookies = (self.entry.data or {}).get("cookies", "")
-        cookies = parse_cookie_string(raw_cookies)
-        self._client = DouyinAPIClient(cookies=cookies, logger=self.context.logger)
-        self._max_retries = (self.entry.data or {}).get("download_max_retries", 3)
+        """Retrieve the shared API client and config from plugin data."""
+        entry_data = self.context.data[DOMAIN]
+        self._client = entry_data["client"]
+        self._max_retries = entry_data["config"].download_max_retries
         self.context.logger.debug(f"{DOMAIN} downloader initialized")
 
     async def download(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -83,9 +81,3 @@ class Downloader:
             "cover_path": str(cover_path) if cover_path else None,
         }
 
-    async def async_will_remove(self):
-        """Clean up resources."""
-        if self._client:
-            await self._client.close()
-            self._client = None
-            self.context.logger.info(f"{DOMAIN} downloader client closed")
