@@ -23,6 +23,11 @@ async def async_setup(context: PluginContext) -> bool:
 async def async_setup_entry(context: PluginContext, entry):
     config = cast(ConfigSchema, context.get_config(DOMAIN)) if context.get_config else ConfigSchema()
 
+    cookies = parse_cookie_string(config.cookies)
+    if not cookies:
+        context.logger.warning(f"{DOMAIN} plugin skipped: 'cookies' is not configured")
+        return False
+
     def _on_cookies_updated(updated: dict[str, str]) -> None:
         if context.save_config and context.get_config:
             cfg = context.get_config(DOMAIN)
@@ -30,7 +35,7 @@ async def async_setup_entry(context: PluginContext, entry):
             context.logger.debug(f"{DOMAIN} cookies persisted")
 
     client = DouyinAPIClient(
-        cookies=parse_cookie_string(config.cookies),
+        cookies=cookies,
         logger=context.logger,
         on_cookies_updated=_on_cookies_updated,
     )
