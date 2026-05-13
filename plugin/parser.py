@@ -1,25 +1,29 @@
 """Douyin content parser plugin."""
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from contenthive.plugins.context import PluginContext
 from contenthive.plugins.contracts import (
-    MediaType, ParserResultStatus,
-    ParserAuthorInfo, ParserMediaInfo, ParserPlatformInfo, ParserResult,
+    MediaType,
+    ParserAuthorInfo,
+    ParserMediaInfo,
+    ParserPlatformInfo,
+    ParserResult,
+    ParserResultStatus,
 )
 
 from .api_client import DouyinAPIClient
-from .utils import extract_all_urls, extract_video_urls, extract_image_urls, iter_gallery_items
 from .const import (
     DOMAIN,
-    URL_PATTERN,
     GALLERY_AWEME_TYPES,
     PLATFORM_CODE,
     PLATFORM_ICON,
     PLATFORM_NAME,
     PLATFORM_URL,
+    URL_PATTERN,
 )
+from .utils import extract_all_urls, extract_image_urls, extract_video_urls, iter_gallery_items
 
 _AWEME_ID_RE = re.compile(r"/(?:video|note|gallery|slides)/(\d+)")
 
@@ -44,7 +48,7 @@ class Parser:
         self.context = context
         self.entry = entry
         self.domain = DOMAIN
-        self._client: Optional[DouyinAPIClient] = None
+        self._client: DouyinAPIClient | None = None
 
     async def async_setup(self):
         """Retrieve the shared API client from plugin data."""
@@ -85,7 +89,6 @@ class Parser:
             self.context.logger.exception(f"Failed to parse {url}")
             raise
 
-
     def _build_result(self, url: str, aweme: dict) -> ParserResult:
         """Assemble a complete ParserResult from a raw aweme dict."""
         return ParserResult(
@@ -100,7 +103,7 @@ class Parser:
             parser=DOMAIN,
             state=ParserResultStatus.SUCCESS,
         )
-    
+
     def _detect_media_type(self, aweme: dict) -> str:
         """Return 'gallery' or 'video' based on aweme fields."""
         if aweme.get("image_post_info") or aweme.get("images") or aweme.get("image_list"):
@@ -119,7 +122,7 @@ class Parser:
             return self._build_gallery_media(aweme)
         else:
             return []
-    
+
     def _build_video_media(self, aweme: dict) -> list[ParserMediaInfo]:
         """Build a single-item list with the video's ParserMediaInfo."""
         video = aweme.get("video") or {}
@@ -146,7 +149,6 @@ class Parser:
                 height=height,
             )
         ]
-
 
     def _build_gallery_media(self, aweme: dict) -> list[ParserMediaInfo]:
         """Build a list of ParserMediaInfo for each image/live-photo in the gallery."""
@@ -194,7 +196,6 @@ class Parser:
 
         return media_list
 
-
     def _build_author(self, aweme: dict) -> ParserAuthorInfo:
         """Build a ParserAuthorInfo from aweme author data."""
         author = aweme.get("author") or {}
@@ -203,7 +204,10 @@ class Parser:
         nickname = author.get("nickname") or ""
         short_id = author.get("short_id") or ""
         unique_id = author.get("unique_id") or ""
-        avatar_url = author.get("avatar_thumb", {}).get("url_list", [None])[0] or author.get("avatar_medium", {}).get("url_list", [None])[0]
+        avatar_url = (
+            author.get("avatar_thumb", {}).get("url_list", [None])[0]
+            or author.get("avatar_medium", {}).get("url_list", [None])[0]
+        )
         profile_url = f"{PLATFORM_URL}/user/{sec_uid}" if sec_uid else None
 
         return ParserAuthorInfo(
@@ -216,7 +220,6 @@ class Parser:
             description=author.get("signature") or None,
         )
 
-
     def _build_platform(self) -> ParserPlatformInfo:
         """Get platform information."""
         return ParserPlatformInfo(
@@ -226,6 +229,7 @@ class Parser:
             icon_url=PLATFORM_ICON,
         )
 
-def _extract_aweme_id(url: str) -> Optional[str]:
+
+def _extract_aweme_id(url: str) -> str | None:
     match = _AWEME_ID_RE.search(url)
     return match.group(1) if match else None

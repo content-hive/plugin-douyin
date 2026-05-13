@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import random
@@ -14,17 +15,18 @@ import string
 import tempfile
 import time
 import urllib.request
+from collections.abc import Callable
 from http.cookies import SimpleCookie
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any
 from urllib.parse import urlencode
 
 import aiofiles
 import aiohttp
 
-from .const import BASE_URL, USER_AGENT, REQUEST_HEADERS
-from .crypto import XBogus, ABogus, BrowserFingerprintGenerator
+from .const import BASE_URL, REQUEST_HEADERS, USER_AGENT
+from .crypto import ABogus, BrowserFingerprintGenerator, XBogus
 
 
 class MsTokenManager:
@@ -37,11 +39,9 @@ class MsTokenManager:
     3. Fall back to a randomly-generated false token.
     """
 
-    F2_CONF_URL = (
-        "https://raw.githubusercontent.com/Johnserf-Seed/f2/main/f2/conf/conf.yaml"
-    )
+    F2_CONF_URL = "https://raw.githubusercontent.com/Johnserf-Seed/f2/main/f2/conf/conf.yaml"
 
-    _cached_conf: Optional[Dict[str, Any]] = None
+    _cached_conf: dict[str, Any] | None = None
     _cached_at: float = 0
     _cache_ttl: int = 3600
     _lock = Lock()
@@ -51,16 +51,14 @@ class MsTokenManager:
         self.timeout = timeout
 
     @staticmethod
-    def _is_valid(token: Optional[str]) -> bool:
+    def _is_valid(token: str | None) -> bool:
         return bool(token and isinstance(token, str) and len(token.strip()) in (164, 184))
 
     @staticmethod
     def gen_false_ms_token() -> str:
-        return (
-            "".join(random.choices(string.ascii_letters + string.digits, k=182)) + "=="
-        )
+        return "".join(random.choices(string.ascii_letters + string.digits, k=182)) + "=="
 
-    def ensure_ms_token(self, cookies: Dict[str, str]) -> str:
+    def ensure_ms_token(self, cookies: dict[str, str]) -> str:
         existing = (cookies or {}).get("msToken", "").strip()
         if self._is_valid(existing):
             return existing
@@ -69,7 +67,7 @@ class MsTokenManager:
             return real
         return self.gen_false_ms_token()
 
-    def _gen_real_ms_token(self) -> Optional[str]:
+    def _gen_real_ms_token(self) -> str | None:
         conf = self._load_f2_conf()
         if not conf:
             return None
@@ -100,7 +98,7 @@ class MsTokenManager:
             pass
         return None
 
-    def _load_f2_conf(self) -> Optional[Dict[str, Any]]:
+    def _load_f2_conf(self) -> dict[str, Any] | None:
         now = time.time()
         with self._lock:
             if self._cached_conf and (now - self._cached_at) < self._cache_ttl:
@@ -124,10 +122,8 @@ class MsTokenManager:
             return None
 
     @staticmethod
-    def _extract_token_from_headers(headers: Any) -> Optional[str]:
-        set_cookies = (
-            headers.get_all("Set-Cookie") if hasattr(headers, "get_all") else []
-        )
+    def _extract_token_from_headers(headers: Any) -> str | None:
+        set_cookies = headers.get_all("Set-Cookie") if hasattr(headers, "get_all") else []
         for header in set_cookies or []:
             cookie = SimpleCookie()
             cookie.load(header)
@@ -149,23 +145,21 @@ class DouyinAPIClient:
 
     def __init__(
         self,
-        cookies: Dict[str, str],
-        logger: Optional[Any] = None,
-        on_cookies_updated: Optional[Callable[[Dict[str, str]], None]] = None,
+        cookies: dict[str, str],
+        logger: Any | None = None,
+        on_cookies_updated: Callable[[dict[str, str]], None] | None = None,
     ):
         self.logger = logger
-        self.cookies: Dict[str, str] = dict(cookies or {})
+        self.cookies: dict[str, str] = dict(cookies or {})
         self._on_cookies_updated = on_cookies_updated
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._headers = REQUEST_HEADERS
         self._signer = XBogus(user_agent=USER_AGENT)
         self._ms_token_manager = MsTokenManager(user_agent=USER_AGENT)
         self._ms_token: str = self.cookies.get("msToken", "").strip()
-        self._abogus_enabled = (
-            ABogus is not None and BrowserFingerprintGenerator is not None
-        )
+        self._abogus_enabled = ABogus is not None and BrowserFingerprintGenerator is not None
 
-    async def __aenter__(self) -> "DouyinAPIClient":
+    async def __aenter__(self) -> DouyinAPIClient:
         await self.ensure_session()
         return self
 
@@ -193,10 +187,8 @@ class DouyinAPIClient:
         if not self._session or self._session.closed:
             return
 
-        session_cookies: Dict[str, str] = {
-            morsel.key: morsel.value
-            for morsel in self._session.cookie_jar
-            if morsel.value
+        session_cookies: dict[str, str] = {
+            morsel.key: morsel.value for morsel in self._session.cookie_jar if morsel.value
         }
 
         if self.cookies != session_cookies:
@@ -215,9 +207,7 @@ class DouyinAPIClient:
     async def _ensure_ms_token(self) -> str:
         if self._ms_token:
             return self._ms_token
-        token = await asyncio.to_thread(
-            self._ms_token_manager.ensure_ms_token, self.cookies
-        )
+        token = await asyncio.to_thread(self._ms_token_manager.ensure_ms_token, self.cookies)
         self._ms_token = token.strip()
         if self._ms_token:
             self.cookies["msToken"] = self._ms_token
@@ -225,7 +215,7 @@ class DouyinAPIClient:
                 self._session.cookie_jar.update_cookies({"msToken": self._ms_token})
         return self._ms_token
 
-    async def _default_params(self) -> Dict[str, Any]:
+    async def _default_params(self) -> dict[str, Any]:
         ms_token = await self._ensure_ms_token()
         return {
             "device_platform": "webapp",
@@ -254,8 +244,8 @@ class DouyinAPIClient:
             "round_trip_time": "100",
             "msToken": ms_token,
         }
-    
-    def _download_headers(self, user_agent: str | None = None) -> Dict[str, str]:
+
+    def _download_headers(self, user_agent: str | None = None) -> dict[str, str]:
         headers = {
             "User-Agent": user_agent or self._headers.get("User-Agent", ""),
             "Referer": f"{BASE_URL}/",
@@ -264,7 +254,7 @@ class DouyinAPIClient:
         }
         return headers
 
-    def _build_signed_path(self, path: str, params: Dict[str, Any]) -> Tuple[str, str]:
+    def _build_signed_path(self, path: str, params: dict[str, Any]) -> tuple[str, str]:
         """Build a signed URL, preferring ABogus over XBogus when available."""
         query = urlencode(params)
         base_url = f"{BASE_URL}{path}"
@@ -274,7 +264,7 @@ class DouyinAPIClient:
         signed_url, _xb, ua = self._signer.build(f"{base_url}?{query}")
         return signed_url, ua
 
-    def _build_abogus_url(self, base_url: str, query: str) -> Optional[Tuple[str, str]]:
+    def _build_abogus_url(self, base_url: str, query: str) -> tuple[str, str] | None:
         """Try to build an ABogus-signed URL; return None to fall back to XBogus."""
         if not self._abogus_enabled:
             return None
@@ -291,10 +281,10 @@ class DouyinAPIClient:
     async def _request_json(
         self,
         path: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         *,
         max_retries: int = 3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Send a signed GET request with retries, mirroring the reference _request_json."""
         await self.ensure_session()
         assert self._session is not None
@@ -323,7 +313,7 @@ class DouyinAPIClient:
 
         return {}
 
-    async def get_aweme_detail(self, aweme_id: str) -> Optional[Dict[str, Any]]:
+    async def get_aweme_detail(self, aweme_id: str) -> dict[str, Any] | None:
         """Fetch aweme detail. Tries aid=6383 first (gallery/note), then aid=1128 (video)."""
         for aid in self._DETAIL_AIDS:
             params = await self._default_params()
@@ -388,9 +378,7 @@ class DouyinAPIClient:
 
                 try:
                     async with session.get(
-                        current_url,
-                        headers=self._download_headers(),
-                        timeout=aiohttp.ClientTimeout(total=300)
+                        current_url, headers=self._download_headers(), timeout=aiohttp.ClientTimeout(total=300)
                     ) as response:
                         response.raise_for_status()
 
@@ -402,9 +390,7 @@ class DouyinAPIClient:
                                 written += len(chunk)
 
                         if expected_size is not None and written != expected_size:
-                            last_error = ValueError(
-                                f"Size mismatch: expected {expected_size}, got {written}"
-                            )
+                            last_error = ValueError(f"Size mismatch: expected {expected_size}, got {written}")
                             if self.logger:
                                 self.logger.debug(f"Size mismatch for {current_url}: {last_error}")
                             write_path.unlink(missing_ok=True)
@@ -431,7 +417,7 @@ class DouyinAPIClient:
                     last_error = e
 
                 if attempt < max_retries:
-                    wait = 2 ** attempt
+                    wait = 2**attempt
                     if (
                         isinstance(last_error, aiohttp.ClientResponseError)
                         and last_error.status == 429
@@ -439,10 +425,8 @@ class DouyinAPIClient:
                     ):
                         retry_after = last_error.headers.get("Retry-After")
                         if retry_after is not None:
-                            try:
+                            with contextlib.suppress(ValueError):
                                 wait = float(retry_after)
-                            except ValueError:
-                                pass
                     if self.logger:
                         self.logger.debug(
                             f"Download attempt {attempt + 1}/{max_retries + 1} "

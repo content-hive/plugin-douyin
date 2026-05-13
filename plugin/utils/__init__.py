@@ -1,6 +1,6 @@
 """Utility helpers for the Douyin parser plugin."""
 
-from typing import Any, Optional
+from typing import Any
 
 
 def parse_cookie_string(raw: str) -> dict[str, str]:
@@ -53,11 +53,11 @@ def extract_video_urls(video: dict) -> list[str]:
         bitrate = stream.get("bit_rate", 0)
 
         return (
-            height,    # higher resolution is better
-            fps,       # higher frame rate is better
-            is_mp4,    # prefer mp4 over dash (single file, no separate audio stream)
-            is_h265,   # H.265 offers better compression efficiency
-            bitrate,   # higher bitrate is better
+            height,  # higher resolution is better
+            fps,  # higher frame rate is better
+            is_mp4,  # prefer mp4 over dash (single file, no separate audio stream)
+            is_h265,  # H.265 offers better compression efficiency
+            bitrate,  # higher bitrate is better
         )
 
     best_stream = None
@@ -67,10 +67,7 @@ def extract_video_urls(video: dict) -> list[str]:
             valid_streams.sort(key=score, reverse=True)
             best_stream = valid_streams[0]
 
-    if best_stream:
-        play_addr = best_stream.get("play_addr") or {}
-    else:
-        play_addr = video.get("play_addr") or {}
+    play_addr = best_stream.get("play_addr") or {} if best_stream else video.get("play_addr") or {}
 
     url_list = [u for u in (play_addr.get("url_list") or []) if u]
     if not url_list:

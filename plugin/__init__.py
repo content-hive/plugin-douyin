@@ -8,11 +8,11 @@ from typing import cast
 from contenthive.plugins.context import PluginContext
 
 from .api_client import DouyinAPIClient
-from .config import ConfigSchema, CONFIG_SCHEMA
+from .config import CONFIG_SCHEMA, ConfigSchema
 from .const import DOMAIN
 from .utils import parse_cookie_string, serialize_cookie_dict
 
-__all__ = ["ConfigSchema", "CONFIG_SCHEMA"]
+__all__ = ["CONFIG_SCHEMA", "ConfigSchema"]
 
 
 async def async_setup(context: PluginContext) -> bool:

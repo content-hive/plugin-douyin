@@ -8,4 +8,4 @@ except Exception:  # pragma: no cover - optional dependency (requires gmssl)
     ABogus = None  # type: ignore[assignment,misc]
     BrowserFingerprintGenerator = None  # type: ignore[assignment,misc]
 
-__all__ = ["XBogus", "ABogus", "BrowserFingerprintGenerator"]
+__all__ = ["ABogus", "BrowserFingerprintGenerator", "XBogus"]

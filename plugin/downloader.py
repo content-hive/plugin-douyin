@@ -1,12 +1,12 @@
-
 import asyncio
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from contenthive.plugins.context import PluginContext
 
 from .api_client import DouyinAPIClient
 from .const import DOMAIN
+
 
 async def async_setup_entry(context: PluginContext, entry, async_add_entities):
     """Set up downloader entities from a config entry."""
@@ -27,7 +27,7 @@ class Downloader:
         self.context = context
         self.entry = entry
         self.domain = DOMAIN
-        self._client: Optional[DouyinAPIClient] = None
+        self._client: DouyinAPIClient | None = None
 
     async def async_setup(self):
         """Retrieve the shared API client and config from plugin data."""
@@ -50,10 +50,7 @@ class Downloader:
         if not media_urls:
             raise ValueError("Missing 'url' and 'url_fallbacks' in media object")
 
-        cover_urls = (
-            [media["cover"]] + [u for u in (media.get("cover_fallbacks") or [])]
-            if media.get("cover") else []
-        )
+        cover_urls = [media["cover"]] + [u for u in (media.get("cover_fallbacks") or [])] if media.get("cover") else []
 
         self.context.logger.debug(
             f"Starting download: {len(media_urls)} media URL(s), "
@@ -74,10 +71,9 @@ class Downloader:
         if isinstance(cover_result, BaseException):
             self.context.logger.warning(f"Cover download failed, skipping: {cover_result}")
             cover_result = None
-        cover_path: Optional[Path] = cover_result
+        cover_path: Path | None = cover_result
 
         return {
             "media_path": str(media_path) if media_path else None,
             "cover_path": str(cover_path) if cover_path else None,
         }
-
