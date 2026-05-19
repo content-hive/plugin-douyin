@@ -26,6 +26,7 @@ from .const import (
 from .utils import extract_all_urls, extract_image_urls, extract_video_urls, iter_gallery_items
 
 _AWEME_ID_RE = re.compile(r"/(?:video|note|gallery|slides)/(\d+)")
+_SIZE_RE = re.compile(r"\d+x\d+")
 
 
 async def async_setup_entry(context: PluginContext, entry, async_add_entities):
@@ -204,10 +205,7 @@ class Parser:
         nickname = author.get("nickname") or ""
         short_id = author.get("short_id") or ""
         unique_id = author.get("unique_id") or ""
-        avatar_url = (
-            author.get("avatar_thumb", {}).get("url_list", [None])[0]
-            or author.get("avatar_medium", {}).get("url_list", [None])[0]
-        )
+        avatar_url = _extract_avatar_url(author)
         profile_url = f"{PLATFORM_URL}/user/{sec_uid}" if sec_uid else None
 
         return ParserAuthorInfo(
@@ -233,3 +231,20 @@ class Parser:
 def _extract_aweme_id(url: str) -> str | None:
     match = _AWEME_ID_RE.search(url)
     return match.group(1) if match else None
+
+
+def _extract_avatar_url(author: dict) -> str | None:
+    for key in ("avatar_thumb", "avatar_medium"):
+        avatar = author.get(key) or {}
+        url_list = avatar.get("url_list") or []
+        if not url_list:
+            continue
+        url = url_list[0]
+        if not url:
+            continue
+        width = avatar.get("width")
+        height = avatar.get("height")
+        if width and height:
+            url = _SIZE_RE.sub(f"{width}x{height}", url, count=1)
+        return url
+    return None
