@@ -242,9 +242,6 @@ def _extract_avatar_url(author: dict) -> str | None:
         url = url_list[0]
         if not url:
             continue
-        width = avatar.get("width")
-        height = avatar.get("height")
-        if width and height:
-            url = _SIZE_RE.sub(f"{width}x{height}", url, count=1)
+        url = _SIZE_RE.sub("1080x1080", url, count=1)
         return url
     return None
