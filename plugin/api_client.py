@@ -192,17 +192,18 @@ class DouyinAPIClient:
         }
 
         if self.cookies != session_cookies:
-            self.cookies = session_cookies
-            self._notify_cookies_updated()
+            self._notify_cookies_updated(session_cookies)
 
-    def _notify_cookies_updated(self) -> None:
+    def _notify_cookies_updated(self, updated: dict[str, str]) -> None:
         """Fire the on_cookies_updated callback if one is registered."""
         if self._on_cookies_updated:
             try:
-                self._on_cookies_updated(dict(self.cookies))
+                self._on_cookies_updated(dict(updated))
             except Exception as e:
                 if self.logger:
                     self.logger.warning(f"Failed to persist updated cookies to config: {e}")
+                return
+        self.cookies = updated
 
     async def _ensure_ms_token(self) -> str:
         if self._ms_token:
