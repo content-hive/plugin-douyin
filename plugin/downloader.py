@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -7,7 +8,6 @@ from contenthive.plugins.contracts import ProgressCallback
 
 from .api_client import DouyinAPIClient
 from .const import DOMAIN
-from .utils.download_progress import ByteProgressAggregator, invoke_progress
 
 
 async def async_setup_entry(context: PluginContext, entry, async_add_entities):
@@ -20,6 +20,38 @@ async def async_setup_entry(context: PluginContext, entry, async_add_entities):
         context.register_service(DOMAIN, "download", downloader.download)
 
     context.logger.info(f"{DOMAIN} downloader platform setup completed")
+
+
+async def _invoke_progress(on_progress: ProgressCallback | None, pct: int) -> None:
+    """Invoke sync or async percent callback."""
+    if on_progress is None:
+        return
+    result = on_progress(pct)
+    if inspect.isawaitable(result):
+        await result
+
+
+def _bind_media_progress(on_progress: ProgressCallback | None):
+    """Convert media byte progress to on_progress percent (0-99, monotonic).
+
+    100 is reserved for the final callback after download_file succeeds.
+    """
+    if on_progress is None:
+        return None
+
+    last_pct = -1
+
+    async def _report(downloaded: int, total: int | None) -> None:
+        nonlocal last_pct
+        if total is None or total <= 0:
+            return
+        pct = min(99, int(downloaded * 100 / total))
+        if pct <= last_pct:
+            return
+        last_pct = pct
+        await _invoke_progress(on_progress, pct)
+
+    return _report
 
 
 class Downloader:
@@ -54,7 +86,6 @@ class Downloader:
 
         cover_urls = [media["cover"]] + [u for u in (media.get("cover_fallbacks") or [])] if media.get("cover") else []
         on_progress: ProgressCallback | None = data.get("on_progress")
-        aggregator = ByteProgressAggregator(on_progress)
 
         self.context.logger.debug(
             f"Starting download: {len(media_urls)} media URL(s), "
@@ -65,7 +96,7 @@ class Downloader:
             self._client.download_file(
                 media_urls,
                 max_retries=self._max_retries,
-                on_byte_progress=aggregator.track("media"),
+                on_byte_progress=_bind_media_progress(on_progress),
             )
         ]
         if cover_urls:
@@ -73,7 +104,6 @@ class Downloader:
                 self._client.download_file(
                     cover_urls,
                     max_retries=self._max_retries,
-                    on_byte_progress=aggregator.track("cover"),
                 )
             )
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -89,7 +119,7 @@ class Downloader:
             cover_result = None
         cover_path: Path | None = cover_result
 
-        await invoke_progress(on_progress, 100)
+        await _invoke_progress(on_progress, 100)
 
         return {
             "media_path": str(media_path) if media_path else None,
