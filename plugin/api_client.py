@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import json
 import os
 import random
@@ -359,12 +360,18 @@ class DouyinAPIClient:
         self,
         url: str | list[str],
         max_retries: int = 3,
+        on_byte_progress: Callable[[int, int | None], Any] | None = None,
     ) -> Path:
         """Download a file to the system temp directory and return its path.
 
         Accepts a single URL or a list of URLs. Each URL is tried with exponential
         backoff on network errors, 5xx, and 429 responses. Non-retryable 4xx errors
         and exhausted retries cause fallback to the next URL. Raises if all URLs fail.
+
+        Args:
+            url: Single URL or ordered list of fallback URLs
+            max_retries: Retries per URL on transient errors
+            on_byte_progress: Optional callback(downloaded, total_or_none); may be async
         """
         session = await self.ensure_session()
         urls = [url] if isinstance(url, str) else url
@@ -389,6 +396,19 @@ class DouyinAPIClient:
                             async for chunk in response.content.iter_chunked(8192):
                                 await f.write(chunk)
                                 written += len(chunk)
+                                if on_byte_progress is not None:
+                                    try:
+                                        maybe_awaitable = on_byte_progress(written, expected_size)
+                                        if inspect.isawaitable(maybe_awaitable):
+                                            await maybe_awaitable
+                                    except asyncio.CancelledError:
+                                        raise
+                                    except Exception:
+                                        if self.logger:
+                                            self.logger.debug(
+                                                "on_byte_progress failed",
+                                                exc_info=True,
+                                            )
 
                         if expected_size is not None and written != expected_size:
                             last_error = ValueError(f"Size mismatch: expected {expected_size}, got {written}")
