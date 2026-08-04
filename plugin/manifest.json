@@ -1,0 +1,15 @@
+{
+  "domain": "douyin",
+  "name": "抖音",
+  "version": "0.1.9",
+  "description": "一个用于Content Hive的抖音内容解析插件。通过解析抖音链接，提取视频内容、作者信息等数据。",
+  "author": [
+    "content-hive"
+  ],
+  "requirements": [
+    "gmssl>=3.2.2"
+  ],
+  "config_flow": false,
+  "disclaimer": "本插件通过解析抖音链接获取内容，需要配置账号 Cookie 以访问受保护内容，存在账号被封禁的风险。使用前请确保符合抖音服务条款及当地法律法规，并自行承担相关风险。平台规则变更可能导致插件失效。",
+  "release_notes": "Registry migration: track per-plugin manifest."
+}
