@@ -1,7 +1,7 @@
 {
   "domain": "douyin",
   "name": "抖音",
-  "version": "0.1.10-beta.1",
+  "version": "0.1.10",
   "description": "一个用于Content Hive的抖音内容解析插件。通过解析抖音链接，提取视频内容、作者信息等数据。",
   "author": [
     "content-hive"
