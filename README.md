@@ -23,9 +23,3 @@ Installed automatically by Content Hive from `manifest.json`.
 ## Disclaimer
 
 > 本插件通过解析抖音链接获取内容，需要配置账号 Cookie 以访问受保护内容，存在账号被封禁的风险。使用前请确保符合抖音服务条款及当地法律法规，并自行承担相关风险。平台规则变更可能导致插件失效。
-
-## Releasing
-
-1. Bump `version` and rewrite `release_notes` in `plugin/manifest.json`.
-2. Merge into `main`.
-3. Publish a GitHub Release whose tag is `v<version>` (for example `v0.1.10`).
