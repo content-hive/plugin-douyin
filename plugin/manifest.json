@@ -10,6 +10,5 @@
     "gmssl>=3.2.2"
   ],
   "config_flow": false,
-  "disclaimer": "本插件通过解析抖音链接获取内容，需要配置账号 Cookie 以访问受保护内容，存在账号被封禁的风险。使用前请确保符合抖音服务条款及当地法律法规，并自行承担相关风险。平台规则变更可能导致插件失效。",
-  "release_notes": "Add Argus gateway headers (uifid, x-tt-argus) and log non-200 Douyin API responses."
+  "disclaimer": "本插件通过解析抖音链接获取内容，需要配置账号 Cookie 以访问受保护内容，存在账号被封禁的风险。使用前请确保符合抖音服务条款及当地法律法规，并自行承担相关风险。平台规则变更可能导致插件失效。"
 }
