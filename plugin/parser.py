@@ -5,12 +5,16 @@ from typing import Any
 
 from contenthive.plugins.context import PluginContext
 from contenthive.plugins.contracts import (
+    CoverStream,
+    ImageStream,
     MediaType,
     ParserAuthorInfo,
     ParserMediaInfo,
     ParserPlatformInfo,
     ParserResult,
     ParserResultStatus,
+    VideoStream,
+    source_key_from_url,
 )
 
 from .api_client import DouyinAPIClient
@@ -137,17 +141,17 @@ class Parser:
 
         cover_urls = extract_all_urls(video.get("origin_cover"))
 
+        streams: list = [VideoStream(urls=video_urls, width=width, height=height)]
+        if cover_urls:
+            streams.append(CoverStream(urls=cover_urls))
         return [
             ParserMediaInfo(
-                url=video_urls[0],
-                url_fallbacks=video_urls[1:] or None,
+                source_key=source_key_from_url(video_urls[0]),
                 type=MediaType.VIDEO,
-                title=None,
-                cover=cover_urls[0] if cover_urls else None,
-                cover_fallbacks=cover_urls[1:] or None,
                 duration=duration,
                 width=width,
                 height=height,
+                streams=streams,
             )
         ]
 
@@ -167,31 +171,32 @@ class Parser:
             video = item_video if isinstance(item_video, dict) else {}
             video_urls = extract_video_urls(video)
 
+            width = item.get("width")
+            height = item.get("height")
             if video_urls:
                 media_list.append(
                     ParserMediaInfo(
-                        url=video_urls[0],
-                        url_fallbacks=video_urls[1:] or None,
+                        source_key=source_key_from_url(video_urls[0]),
                         type=MediaType.LIVEPHOTO,
-                        title=None,
-                        cover=image_urls[0],
-                        cover_fallbacks=image_urls[1:] or None,
                         duration=video.get("duration"),
-                        width=item.get("width"),
-                        height=item.get("height"),
+                        width=width,
+                        height=height,
+                        streams=[
+                            VideoStream(urls=video_urls, width=width, height=height),
+                            ImageStream(urls=image_urls, width=width, height=height),
+                        ],
                     )
                 )
             else:
                 media_list.append(
                     ParserMediaInfo(
-                        url=image_urls[0],
-                        url_fallbacks=image_urls[1:] or None,
+                        source_key=source_key_from_url(image_urls[0]),
                         type=MediaType.IMAGE,
-                        title=None,
-                        cover=None,
-                        duration=None,
-                        width=item.get("width"),
-                        height=item.get("height"),
+                        width=width,
+                        height=height,
+                        streams=[
+                            ImageStream(urls=image_urls, width=width, height=height)
+                        ],
                     )
                 )
 
