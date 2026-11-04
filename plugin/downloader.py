@@ -67,6 +67,10 @@ class _CombinedByteProgress:
         if self._on_progress is None:
             return None
 
+        # Unknown total until this stream reports a size, so one finished
+        # stream cannot reach 99% before the others have started.
+        self._parts[part_id] = (0, None)
+
         async def _report(downloaded: int, total: int | None) -> None:
             async with self._lock:
                 self._parts[part_id] = (downloaded, total)
@@ -140,13 +144,20 @@ class Downloader:
                     )
                 )
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            failure: BaseException | None = None
             for role, result in zip(roles, results, strict=True):
                 if role == "cover":
                     cover_path = self._optional_cover(result)
                     if cover_path is not None:
                         temps[role] = cover_path
                     continue
-                temps[role] = self._require_path(result, role)
+                path = self._path_or_error(result, role)
+                if isinstance(path, BaseException):
+                    failure = failure or path
+                    continue
+                temps[role] = path
+            if failure is not None:
+                raise failure
             await _invoke_progress(on_progress, 100)
             return {"streams": {role: str(path) for role, path in temps.items()}}
         except Exception:
@@ -154,11 +165,11 @@ class Downloader:
                 path.unlink(missing_ok=True)
             raise
 
-    def _require_path(self, result: object, label: str) -> Path:
+    def _path_or_error(self, result: object, label: str) -> Path | BaseException:
         if isinstance(result, BaseException):
-            raise result
+            return result
         if not isinstance(result, Path):
-            raise RuntimeError(f"Expected {label} download path, got {type(result)!r}")
+            return RuntimeError(f"Expected {label} download path, got {type(result)!r}")
         return result
 
     def _optional_cover(self, result: object) -> Path | None:
