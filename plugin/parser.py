@@ -139,7 +139,7 @@ class Parser:
         if not video_urls:
             return []
 
-        cover_urls = extract_all_urls(video.get("cover_original_scale"))
+        cover_urls = extract_all_urls(video.get("dynamic_cover"))
 
         streams: list = [VideoStream(urls=video_urls, width=width, height=height)]
         if cover_urls:
